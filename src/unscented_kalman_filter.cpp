@@ -177,12 +177,35 @@ void UKF::Prediction(double delta_t)
 
 }
 
+//Sは観測共分散行列
 void UKF::UpdateState(Eigen::VectorXd &x, Eigen::MatrixXd &P, Eigen::MatrixXd &pred_sigma_pts, Eigen::MatrixXd &S,
                       Eigen::MatrixXd &Zsig, Eigen::VectorXd &z_pred, const int &n_z,
                       MeasurementPackage &meas_package)
 {
     //観測行列の共分散
     Eigen::MatrixXd Tc = Eigen::MatrixXd(n_x_ , n_z);
+
+    Tc.fill(0.0);
+    for(int i=0; i<n_aug_size_; ++i)
+    {
+        //residual
+        //Zsigはセンサーによって予測されたシグマポイントの点
+        //z_predは現在いると思われている点
+        Eigen::VectorXd z_diff = Zsig.col(i) - z_pred;
+        Eigen::VectorXd x_diff = pred_sigma_pts.col(i) - x;
+        Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
+    }
+
+    //Kalman gain K
+    Eigen::MatrixXd K = Tc * S.inverse();
+    //residual(観測値と予測値の差)
+    Eigen::VectorXd z_diff = meas_package.raw_measurements_ - z_pred;
+
+    if(use_nis_)
+        NISState(S, z_diff, n_z);
+
+    x += K * z_diff;
+    P = P - K*S*K.transpose();
 }
 
 
