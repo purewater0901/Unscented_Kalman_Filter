@@ -168,7 +168,7 @@ void UKF::Prediction(double delta_t)
     }
 
     /*
-     * Predict the sigma point values for this the time step
+     * Predict the sigma point values for this the time step(モデルによる予測値を計算)
      */
     UKF::SigmaPointPrediction(sigma_pts, predicted_sigma_pts_, delta_t);
 
@@ -204,8 +204,35 @@ void UKF::UpdateState(Eigen::VectorXd &x, Eigen::MatrixXd &P, Eigen::MatrixXd &p
     if(use_nis_)
         NISState(S, z_diff, n_z);
 
+    //共分散行列の更新と位置の更新
     x += K * z_diff;
     P = P - K*S*K.transpose();
+}
+
+//laserを使用して状態と状態の共分散行列を更新する
+void UKF::UpdateLidar(MeasurementPackage &meas_package)
+{
+    const int n_z = 2;
+
+    //測定領域でシグマポイントの行列を作成する
+    Eigen::MatrixXd Zsig = Eigen::MatrixXd(n_z, n_aug_size_);
+
+    //予測したシグマポイントを測定空間に変換する
+    Zsig.row(0) = predicted_sigma_pts_.row(0);
+    Zsig.row(1) = predicted_sigma_pts_.row(1);
+
+    Eigen::VectorXd z_pred = Eigen::VectorXd(n_z);
+
+    //観測行列
+    Eigen::MatrixXd S = Eigen::MatrixXd(n_z, n_z);
+
+    PredictMeanAndCovariance(z_pred, S, Zsig, -1);
+
+    Eigen::MatrixXd R = Eigen::MatrixXd(n_z, n_z);
+    R << std_laspx_ * std_laspx_, 0, 0, std_laspy_*std_laspy_;
+
+    S = S + R;
+    UpdateState(x_, P_, predicted_sigma_pts_, S, Zsig, z_pred, n_z, meas_package);
 }
 
 
